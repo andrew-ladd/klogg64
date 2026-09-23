@@ -11,17 +11,19 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v7
     - name: Download artifacts for last successful CI workflow
       if: ${{ !github.event.inputs.ci-run-id }}
-      uses: dawidd6/action-download-artifact@v2
+      uses: dawidd6/action-download-artifact@v24
       with:
         workflow: ci-build.yml
         workflow_conclusion: success
+        branch: master
+        event: push
 
     - name: Download artifacts for CI workflow with provided run id
       if: ${{ github.event.inputs.ci-run-id }}
-      uses: dawidd6/action-download-artifact@v6
+      uses: dawidd6/action-download-artifact@v24
       with:
         workflow: ci-build.yml
         run_id: ${{ github.event.inputs.ci-run-id }}

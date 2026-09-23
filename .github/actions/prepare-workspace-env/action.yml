@@ -1,5 +1,5 @@
 name: "Set common env vars"
-description: ""
+description: "Set common env vars"
 runs:
   using: "composite"
   steps:

@@ -1,5 +1,5 @@
 name: "Prepare windows packages"
-description: ""
+description: "Prepare windows packages"
 inputs:
   s3-key-id:
     required: true
