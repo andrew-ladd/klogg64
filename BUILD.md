@@ -90,7 +90,12 @@ sudo apt-get install qttools5-dev
 
 Binaries are placed into `build_root/output`.
 
-See `.github/workflows/ci-build.yml` for more information on build process.
+This fork runs macOS-only CI. `.github/workflows/ci-build.yml` builds and tests
+Intel and Apple Silicon apps on pull requests and pushes to `master`.
+`.github/workflows/macos-pkg.yml` builds the Apple Silicon installer from `master`
+(see below). Windows/Linux CI, the Linux CodeQL workflow, and the legacy
+cross-platform release workflow have been removed; packages are available as
+workflow artifacts.
 
 ### Building on Windows
 
