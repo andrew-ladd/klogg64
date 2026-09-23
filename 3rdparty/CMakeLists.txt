@@ -304,6 +304,15 @@ cpmaddpackage(
   "TBB_STRICT OFF"
 )
 
+# Keep Windows runtime files in the common output directory instead of TBB's
+# compiler-version-specific directory, so packaging survives MSVC updates.
+if(WIN32)
+  set_target_properties(tbb PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+    PDB_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+  )
+endif()
+
 if(WIN32)
   set(BUILD_SHARED_LIBS OFF)
 endif()
