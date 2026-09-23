@@ -1,0 +1,111 @@
+name: Build Apple Silicon installer
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-arm64-pkg-master
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_ANALYTICS: '1'
+
+    steps:
+      - name: Check out master
+        uses: actions/checkout@v7
+        with:
+          # Build the triggering commit on pushes; manual runs always build master.
+          ref: ${{ github.event_name == 'push' && github.sha || 'master' }}
+          persist-credentials: false
+
+      - name: Install build tools
+        run: |
+          test "$(uname -m)" = arm64
+          brew install cmake ninja boost ragel
+
+      - name: Install validated Qt version
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.3'
+          host: mac
+          target: desktop
+          arch: clang_64
+          modules: qt5compat
+          archives: qtbase qttools qtsvg qtimageformats qttranslations
+          cache: true
+
+      - name: Configure native build
+        run: |
+          cmake -S . -B build_root -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+            -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DBUILD_NUMBER="$GITHUB_RUN_NUMBER" \
+            -DKLOGG_GENERIC_CPU=ON \
+            -DKLOGG_USE_VECTORSCAN=ON \
+            -DKLOGG_USE_HYPERSCAN=OFF \
+            -DKLOGG_USE_SENTRY=OFF \
+            -DKLOGG_OVERRIDE_MALLOC=OFF \
+            -DKLOGG_BUILD_TESTS=ON
+
+      - name: Build application and tests
+        # Standard ARM runners have limited RAM; avoid oversubscribing C++ builds.
+        run: cmake --build build_root --target ci_build --parallel 3
+
+      - name: Run tests
+        run: ctest --test-dir build_root --output-on-failure --timeout 180
+
+      - name: Build installer
+        run: |
+          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' \
+            build_root/output/klogg.app/Contents/Info.plist)
+          export PKG_VERSION="${version}.${GITHUB_RUN_NUMBER}"
+          export MACDEPLOYQT="$QT_ROOT_DIR/bin/macdeployqt"
+          bash scripts/package-macos.sh build_root packages
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: klogg-macos-arm64-pkg-${{ github.run_number }}
+          path: |
+            packages/*.pkg
+            packages/*.sha256
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Upload test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: klogg-macos-arm64-diagnostics-${{ github.run_number }}
+          path: |
+            build_root/Testing/Temporary/
+            build_root/CMakeFiles/CMakeConfigureLog.yaml
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Summarize installer
+        run: |
+          {
+            echo '### Apple Silicon installer'
+            echo "Source commit: $(git rev-parse HEAD)"
+            echo 'Download the .pkg from the installer artifact on this workflow run.'
+            echo 'Installs /Applications/klogg.app; requires Apple Silicon and macOS 14+.'
+            echo 'The app is ad-hoc signed. The installer is unsigned and not notarized.'
+          } >> "$GITHUB_STEP_SUMMARY"

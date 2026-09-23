@@ -183,9 +183,82 @@ By default, klogg will rely on cmake to figure out target MacOS version. Usually
 To override default cmake value pass an option `-DKLOGG_OSX_DEPLOYMENT_TARGET=<target>` to cmake during configuration step,
 `<target>` is one of `10.14`, `10.15`, `11`, `12`. Klogg's traget must be greater or equal to target used by Qt libraries.
 
+### Apple Silicon validation build
+
+The native ARM64 configuration was validated with Qt 6.7.3, including Core5Compat,
+Vectorscan enabled, and the default system allocator. Use the CI-pinned Qt version:
+the pinned archive dependency does not compile unchanged with Qt 6.11.2.
+Install CMake, Ninja, Boost, and Ragel, then install Qt 6.7.3 for macOS with the
+Qt installer or `aqtinstall`. An isolated installation can be made from the repository root:
+
+```sh
+brew install cmake ninja boost ragel
+python3 -m venv build_root/aqt-env
+build_root/aqt-env/bin/pip install aqtinstall
+build_root/aqt-env/bin/aqt install-qt mac desktop 6.7.3 clang_64 \
+  -O build_root/qt --modules qt5compat \
+  --archives qtbase qttools qtsvg qtimageformats qttranslations
+
+cmake -S . -B build_root -G Ninja \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DCMAKE_PREFIX_PATH="$PWD/build_root/qt/6.7.3/macos" \
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+  -DKLOGG_USE_VECTORSCAN=ON -DKLOGG_USE_HYPERSCAN=OFF \
+  -DKLOGG_USE_SENTRY=OFF -DKLOGG_OVERRIDE_MALLOC=OFF \
+  -DKLOGG_BUILD_TESTS=ON
+cmake --build build_root --target ci_build --parallel 6
+ctest --test-dir build_root --output-on-failure
+file build_root/output/klogg.app/Contents/MacOS/klogg
+```
+
+Use a fresh build directory when switching Qt versions. CMake 4 needs the policy
+compatibility argument for older dependencies. Qt tools must be able to query CPU
+capabilities; restricted environments can incorrectly report missing NEON support.
+
+This command builds for the local Mac, using the current SDK's default deployment
+target and the existing `-march=native` policy. It is not a portable release recipe.
+Set and validate an explicit deployment target and CPU baseline before distribution.
+See [Apple Silicon validation results](APPLE_SILICON_VALIDATION.md) for the measured
+results, local app location, and remaining release work.
+
+### GitHub Actions installer from master
+
+The **Build Apple Silicon installer** workflow (`.github/workflows/macos-pkg.yml`)
+runs on pushes to `master` and supports **Actions → Build Apple Silicon installer →
+Run workflow**. Manual runs also check out `master`, regardless of the selected
+workflow branch. Merge the workflow into the default branch (`master`) for
+GitHub's manual-run button to appear.
+
+The job builds and tests ARM64 with Qt 6.7.3 on a macOS 15 runner, using a generic
+ARMv8 CPU baseline and a macOS 14 deployment target. Download
+`klogg-macos-arm64-pkg-<run number>` from the run's **Artifacts** section. It contains
+`klogg-<version>-mac-arm64.pkg` and its SHA-256 checksum, retained for 30 days.
+
+The installer requires Apple Silicon and macOS 14+, installs
+`/Applications/klogg.app`, and replaces an existing klogg bundle at that location.
+It does not search for or overwrite copies elsewhere. The app is ad-hoc signed;
+the `.pkg` is unsigned and not notarized. No Apple developer credentials or
+repository secrets are required. Downloaded installers may require explicit
+approval in macOS Privacy & Security. The workflow uploads build artifacts; it
+does not publish a GitHub Release.
+
+To package an existing local build using the same script:
+
+```sh
+MACDEPLOYQT="$PWD/build_root/qt/6.7.3/macos/bin/macdeployqt" \
+  bash scripts/package-macos.sh build_root build_root/packages
+```
+
+The local script derives the installer's minimum macOS version from the executable,
+so an older macOS 27 prototype remains a macOS 27 package. To create a macOS 14
+package, configure with `-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0` and
+`-DKLOGG_GENERIC_CPU=ON` and rebuild first. `PKG_VERSION` can optionally override
+the numeric package version; CI appends its run number to the app's version.
+
 ## Running tests
 
-Tests are built by default. To turn them off pass `-DBUILD_TESTS:BOOL=OFF` to cmake.
+Tests are built by default. To turn them off pass `-DKLOGG_BUILD_TESTS:BOOL=OFF` to cmake.
 Tests use catch2 (bundled with klogg sources) and require Qt5Test module. Tests can be run using ctest tool provider by CMake:
 
 ```
