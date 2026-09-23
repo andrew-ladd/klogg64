@@ -271,3 +271,13 @@ cd <path_to_klogg_repository_clone>
 cd build_root
 ctest --build-config RelWithDebInfo --verbose
 ```
+
+### Optional Developer ID signing in macOS CI
+
+The Intel/ARM CI builds produce an unsigned DMG containing an ad-hoc signed app
+when signing credentials are absent. To enable Developer ID signing, configure
+`MACOS_CODESIGN_IDENTITY` as a repository variable and `CODESIGN_BASE64` and
+`CODESIGN_PASSWORD` as repository secrets. Notarization additionally requires
+`NOTARIZATION_USERNAME`, `NOTARIZATION_TEAM`, and `NOTARIZATION_PASSWORD`.
+Signing and notarization are skipped for pull requests. The dedicated ARM64
+`.pkg` workflow remains ad-hoc signed and does not require these credentials.
