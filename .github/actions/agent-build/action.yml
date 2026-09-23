@@ -15,7 +15,13 @@ runs:
       run: |
         mkdir $KLOGG_BUILD_ROOT
         cd $KLOGG_BUILD_ROOT
-        cmake $KLOGG_CMAKE_OPTS -DCPM_SOURCE_CACHE=$KLOGG_WORKSPACE/cpm_cache -DKLOGG_OVERRIDE_MALLOC=OFF $KLOGG_WORKSPACE
+        # Crashpad reads SDK files directly; CMake 4 leaves the sysroot empty.
+        set --
+        if [ "$RUNNER_OS" = "macOS" ]; then
+          sdk_path=$(xcrun --sdk macosx --show-sdk-path)
+          set -- "-DCMAKE_OSX_SYSROOT=$sdk_path"
+        fi
+        cmake "$@" -DCMAKE_POLICY_VERSION_MINIMUM=3.5 $KLOGG_CMAKE_OPTS -DCPM_SOURCE_CACHE=$KLOGG_WORKSPACE/cpm_cache -DKLOGG_OVERRIDE_MALLOC=OFF $KLOGG_WORKSPACE
 
     - name: build
       shell: sh

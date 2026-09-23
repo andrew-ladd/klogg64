@@ -21,6 +21,21 @@
 
 #include "regularexpression.h"
 
+#ifdef KLOGG_HAS_HS
+TEST_CASE( "Accelerated regex backend is active", "[patternmatcher][accelerated]" )
+{
+    HsRegularExpression expression{ RegularExpressionPattern( "ERROR [0-9]+" ) };
+    REQUIRE( expression.isValid() );
+
+    auto matcher = expression.createMatcher();
+    // Correct results alone would also pass after silently falling back to Qt.
+    REQUIRE( std::holds_alternative<HsSingleMatcher>( matcher ) );
+    auto& accelerated = std::get<HsSingleMatcher>( matcher );
+    REQUIRE( accelerated.match( "ERROR 123" ) == MatchedPatterns( 1, 1 ) );
+    REQUIRE( accelerated.match( "INFO 123" ) == MatchedPatterns( 1, 0 ) );
+}
+#endif
+
 SCENARIO( "Pattern matcher in boolean mode", "[patternmatcher]" )
 {
     std::string_view matchLine = "\"This\" is matching pattern";

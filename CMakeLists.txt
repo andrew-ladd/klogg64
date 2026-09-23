@@ -127,7 +127,11 @@ else()
   ucm_add_flags(CXX "-fno-sized-deallocation -fno-omit-frame-pointer")
 
   if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "arm64")
-    ucm_add_flags(C CXX "-march=native -mtune=generic")
+    if(KLOGG_GENERIC_CPU)
+      ucm_add_flags(C CXX "-march=armv8-a -mtune=generic")
+    else()
+      ucm_add_flags(C CXX "-march=native -mtune=generic")
+    endif()
   else()
     ucm_add_flags(C CXX "-mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mpopcnt")
     if(KLOGG_GENERIC_CPU)
@@ -202,6 +206,17 @@ find_package(
 )
 
 set(KLOGG_QT_VERSION ${Qt${QT_VERSION_MAJOR}Core_VERSION})
+
+# Older Qt releases link AGL, including a framework path found on the host
+# outside the SDK. macOS 26+ SDKs removed AGL; it is unused by 64-bit apps.
+if(APPLE AND KLOGG_ARCH EQUAL 64 AND TARGET WrapOpenGL::WrapOpenGL)
+  get_target_property(_klogg_opengl_libraries WrapOpenGL::WrapOpenGL INTERFACE_LINK_LIBRARIES)
+  if(_klogg_opengl_libraries)
+    list(REMOVE_ITEM _klogg_opengl_libraries "-framework AGL")
+    list(FILTER _klogg_opengl_libraries EXCLUDE REGEX "/AGL\\.framework(/.*)?$")
+    set_property(TARGET WrapOpenGL::WrapOpenGL PROPERTY INTERFACE_LINK_LIBRARIES "${_klogg_opengl_libraries}")
+  endif()
+endif()
 
 message("Qt version ${KLOGG_QT_VERSION}")
 message("LTO ${KLOGG_USE_LTO}")
